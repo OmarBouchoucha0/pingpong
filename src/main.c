@@ -3,7 +3,7 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-static int VELOCITY = 500;
+static int VELOCITY = 800;
 static const int INITIAL_BALL_VELOCITY = 500;
 static const int MAX_BALL_VELOCITY = 2000;
 static int BALL_VELOCITY = INITIAL_BALL_VELOCITY;
@@ -12,7 +12,6 @@ static int WINDOW_HEIGHT = 900;
 static int PLAYER1_GOALS = 0;
 static int PLAYER2_GOALS = 0;
 static bool GOAL_SCORED = false;
-static bool GAME_OVER = false;
 static int GOALS_TO_WIN = 1;
 
 typedef enum BallDirectionX BallDirectionX;
@@ -20,6 +19,7 @@ enum BallDirectionX {
   RIGHT,
   LEFT,
 };
+
 static BallDirectionX BALL_DIRECTION_X = RIGHT;
 
 typedef enum BallDirectionY BallDirectionY;
@@ -29,40 +29,68 @@ enum BallDirectionY {
 };
 static BallDirectionY BALL_DIRECTION_Y = UP;
 
+typedef enum GameState GameState;
+enum GameState {
+  MENU,
+  GAME,
+  GAME_OVER,
+};
+static GameState GAME_STATE = MENU;
+
+typedef enum MenuOptions MenuOptions;
+enum MenuOptions {
+  START,
+  QUIT,
+};
+
+void resetGameState(Rectangle *player1, Rectangle *player2, Rectangle *ball) {
+  GAME_STATE = GAME;
+  int player_width = WINDOW_WIDTH / 100;
+  int player_height = WINDOW_HEIGHT / 5;
+  int player_offsetx = 10;
+  int player_offsety = WINDOW_HEIGHT / 2 - player_height / 2;
+
+  player1->x = player_offsetx;
+  player1->y = player_offsety;
+
+  player2->x = WINDOW_WIDTH - player_offsetx - player_width;
+  player2->y = player_offsety;
+
+  ball->x = WINDOW_WIDTH / 2 - ball->width / 2;
+  ball->y = WINDOW_HEIGHT / 2 - ball->height / 2;
+
+  PLAYER1_GOALS = 0;
+  PLAYER2_GOALS = 0;
+  BALL_VELOCITY = INITIAL_BALL_VELOCITY;
+}
+
 void input(float dt, Rectangle *player1, Rectangle *player2, Rectangle *ball) {
-  if (IsKeyDown(KEY_UP) && player1->y > 0) {
-    player1->y -= VELOCITY * dt;
-  }
-  if (IsKeyDown(KEY_DOWN) && player1->y + player1->height < WINDOW_HEIGHT) {
-    player1->y += VELOCITY * dt;
-  }
-  if (IsKeyDown(KEY_W) && player2->y > 0) {
-    player2->y -= VELOCITY * dt;
-  }
-  if (IsKeyDown(KEY_S) && player2->y + player2->height < WINDOW_HEIGHT) {
-    player2->y += VELOCITY * dt;
-  }
-  if (GAME_OVER) {
+  switch (GAME_STATE) {
+  case MENU: {
     if (IsKeyDown(KEY_R)) {
-      GAME_OVER = false;
-      int player_width = WINDOW_WIDTH / 100;
-      int player_height = WINDOW_HEIGHT / 5;
-      int player_offsetx = 10;
-      int player_offsety = WINDOW_HEIGHT / 2 - player_height / 2;
-
-      player1->x = player_offsetx;
-      player1->y = player_offsety;
-
-      player2->x = WINDOW_WIDTH - player_offsetx - player_width;
-      player2->y = player_offsety;
-
-      ball->x = WINDOW_WIDTH / 2 - ball->width / 2;
-      ball->y = WINDOW_HEIGHT / 2 - ball->height / 2;
-
-      PLAYER1_GOALS = 0;
-      PLAYER2_GOALS = 0;
-      BALL_VELOCITY = INITIAL_BALL_VELOCITY;
+      GAME_STATE = GAME;
     }
+  } break;
+  case GAME: {
+
+    if (IsKeyDown(KEY_UP) && player2->y > 0) {
+      player2->y -= VELOCITY * dt;
+    }
+    if (IsKeyDown(KEY_DOWN) && player2->y + player2->height < WINDOW_HEIGHT) {
+      player2->y += VELOCITY * dt;
+    }
+    if (IsKeyDown(KEY_W) && player1->y > 0) {
+      player1->y -= VELOCITY * dt;
+    }
+    if (IsKeyDown(KEY_S) && player1->y + player1->height < WINDOW_HEIGHT) {
+      player1->y += VELOCITY * dt;
+    }
+  } break;
+  case GAME_OVER: {
+    if (IsKeyDown(KEY_R)) {
+      resetGameState(player1, player2, ball);
+    }
+  } break;
   }
 }
 
@@ -82,7 +110,7 @@ void physics(float dt, Rectangle *ball, Rectangle player1, Rectangle player2) {
     GOAL_SCORED = true;
     BALL_VELOCITY = INITIAL_BALL_VELOCITY;
     if (PLAYER1_GOALS >= GOALS_TO_WIN || PLAYER2_GOALS >= GOALS_TO_WIN) {
-      GAME_OVER = true;
+      GAME_STATE = GAME_OVER;
     }
   }
   if (ball->x < 0) {
@@ -92,7 +120,7 @@ void physics(float dt, Rectangle *ball, Rectangle player1, Rectangle player2) {
     GOAL_SCORED = true;
     BALL_VELOCITY = INITIAL_BALL_VELOCITY;
     if (PLAYER1_GOALS >= GOALS_TO_WIN || PLAYER2_GOALS >= GOALS_TO_WIN) {
-      GAME_OVER = true;
+      GAME_STATE = GAME_OVER;
     }
   }
 
@@ -163,6 +191,7 @@ int main() {
   float dt;
   char info_buffer[100];
   float celebration_time = 0;
+  float text_flashing_interval = 0;
   while (!WindowShouldClose()) {
     dt = GetFrameTime();
 
@@ -172,7 +201,22 @@ int main() {
     }
     BeginDrawing();
     ClearBackground(BLACK);
-    if (!GAME_OVER) {
+
+    switch (GAME_STATE) {
+    case MENU: {
+      DrawRectangleLinesEx(GoalCelebration, 5, RAYWHITE);
+      snprintf(info_buffer, sizeof(info_buffer), "PING PONG");
+      DrawText(info_buffer, (WINDOW_WIDTH - MeasureText(info_buffer, 128)) / 2,
+               WINDOW_HEIGHT / 5, 128, RAYWHITE);
+
+      snprintf(info_buffer, sizeof(info_buffer), "PRESS \"R\" TO START");
+      DrawText(info_buffer, (WINDOW_WIDTH - MeasureText(info_buffer, 32)) / 2,
+               WINDOW_HEIGHT / 2 - 16, 32, RAYWHITE);
+      snprintf(info_buffer, sizeof(info_buffer), "PRESS \"ESC\" TO QUIT");
+      DrawText(info_buffer, (WINDOW_WIDTH - MeasureText(info_buffer, 32)) / 2,
+               WINDOW_HEIGHT / 2 + 16, 32, RAYWHITE);
+    } break;
+    case GAME: {
       DrawRectangle(player1.x, player1.y, player1.width, player1.height,
                     RAYWHITE);
       DrawRectangle(player2.x, player2.y, player2.width, player2.height,
@@ -192,25 +236,40 @@ int main() {
       DrawText(info_buffer, WINDOW_WIDTH / 4, 30, 32, RAYWHITE);
       snprintf(info_buffer, sizeof(info_buffer), "%d", PLAYER2_GOALS);
       DrawText(info_buffer, WINDOW_WIDTH * 3 / 4, 30, 32, RAYWHITE);
-    } else {
+    } break;
+    case GAME_OVER: {
       DrawRectangleLinesEx(GoalCelebration, 5, RAYWHITE);
-      if (PLAYER1_GOALS >= GOALS_TO_WIN) {
-        snprintf(info_buffer, sizeof(info_buffer), "GAME OVER PLAYER1 WINS");
+      snprintf(info_buffer, sizeof(info_buffer), "GAME OVER");
+      DrawText(info_buffer, (WINDOW_WIDTH - MeasureText(info_buffer, 128)) / 2,
+               WINDOW_HEIGHT / 5, 128, RAYWHITE);
+      text_flashing_interval += dt;
+      if (text_flashing_interval > 0.5f) {
+        if (PLAYER1_GOALS >= GOALS_TO_WIN) {
+          snprintf(info_buffer, sizeof(info_buffer), "PLAYER1 WINS");
 
-        DrawText(info_buffer, (WINDOW_WIDTH - MeasureText(info_buffer, 32)) / 2,
-                 WINDOW_HEIGHT / 2, 32, RAYWHITE);
-        snprintf(info_buffer, sizeof(info_buffer), "PRESS R TO RESET");
-        DrawText(info_buffer, (WINDOW_WIDTH - MeasureText(info_buffer, 32)) / 2,
-                 WINDOW_HEIGHT / 2 + 34, 32, RAYWHITE);
+          DrawText(info_buffer,
+                   (WINDOW_WIDTH - MeasureText(info_buffer, 48)) / 2,
+                   WINDOW_HEIGHT / 2, 48, WHITE);
+        }
+        if (PLAYER2_GOALS >= GOALS_TO_WIN) {
+          snprintf(info_buffer, sizeof(info_buffer), "PLAYER2 WINS");
+          DrawText(info_buffer,
+                   (WINDOW_WIDTH - MeasureText(info_buffer, 48)) / 2,
+                   WINDOW_HEIGHT / 2, 48, WHITE);
+        }
       }
-      if (PLAYER2_GOALS >= GOALS_TO_WIN) {
-        snprintf(info_buffer, sizeof(info_buffer), "GAME OVER PLAYER2 WINS");
-        DrawText(info_buffer, (WINDOW_WIDTH - MeasureText(info_buffer, 32)) / 2,
-                 WINDOW_HEIGHT / 2, 32, RAYWHITE);
-        snprintf(info_buffer, sizeof(info_buffer), "PRESS R TO RESET");
-        DrawText(info_buffer, (WINDOW_WIDTH - MeasureText(info_buffer, 32)) / 2,
-                 WINDOW_HEIGHT / 2 + 34, 32, RAYWHITE);
+      if (text_flashing_interval > 1.0f) {
+        text_flashing_interval = 0;
       }
+
+      snprintf(info_buffer, sizeof(info_buffer), "PRESS \"R\" TO RESET");
+      DrawText(info_buffer, (WINDOW_WIDTH - MeasureText(info_buffer, 32)) / 2,
+               WINDOW_HEIGHT * 3 / 4, 32, RAYWHITE);
+      snprintf(info_buffer, sizeof(info_buffer), "PRESS \"ESC\" TO RESET");
+      DrawText(info_buffer, (WINDOW_WIDTH - MeasureText(info_buffer, 32)) / 2,
+               WINDOW_HEIGHT * 3 / 4 + 32, 32, RAYWHITE);
+
+    } break;
     }
     EndDrawing();
   }
